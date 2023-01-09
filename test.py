@@ -25,7 +25,7 @@ def test(env_name:str):
                 action_dim=a_dim,
                 action_bound=a_bound,
                 replacement=REPLACEMENT,
-                device=device,
+                #device=device,
                 memory_capacity=MEMORY_CAPACITY)
 
     t1 = time.time()
@@ -37,7 +37,7 @@ def test(env_name:str):
 
             # Add exploration noise
             a = ddpg.choose_action(s)
-            a = torch.clip(torch.normal(a, VAR).to(device), -2, 2).cpu()  # 在动作选择上添加随机噪声
+            a = np.clip(np.random.normal(a, VAR), -2, 2)  # 在动作选择上添加随机噪声
 
             s_, r, done, _, _ = env.step(a)
 

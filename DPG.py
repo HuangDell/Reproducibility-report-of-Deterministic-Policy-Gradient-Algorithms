@@ -16,19 +16,18 @@ torch.set_default_dtype(torch.float)
 # Actor Net
 # Actor：输入是state，输出的是一个确定性的action
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, action_bound,device):
+    def __init__(self, state_dim, action_dim, action_bound):
         super(Actor, self).__init__()
-        self.device=device
-        self.action_bound = torch.FloatTensor(action_bound).to(self.device)
+        self.action_bound = torch.FloatTensor(action_bound)
 
         # layer
-        self.layer_1 = nn.Linear(state_dim, 30).to(self.device)
+        self.layer_1 = nn.Linear(state_dim, 30)
         nn.init.normal_(self.layer_1.weight, 0., 0.3)
         nn.init.constant_(self.layer_1.bias, 0.1)
         # self.layer_1.weight.data.normal_(0.,0.3)
         # self.layer_1.bias.data.fill_(0.1)
-        self.output = nn.Linear(30, action_dim).to(self.device)
-        self.output.weight.data.normal_(0., 0.3)
+        self.output = nn.Linear(30, action_dim)
+        self.output.weight.data.normal_(0.,0.3)
         self.output.bias.data.fill_(0.1)
 
     def forward(self, s):
@@ -43,32 +42,31 @@ class Actor(nn.Module):
 # Critic输入的是当前的state以及Actor输出的action,输出的是Q-value
 class Critic(nn.Module):
 
-    def __init__(self, state_dim, action_dim,device):
+    def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
         n_layer = 30
         # layer
-        self.device=device
-        self.layer_1 = nn.Linear(state_dim, n_layer).to(self.device)
+        self.layer_1 = nn.Linear(state_dim, n_layer)
         nn.init.normal_(self.layer_1.weight, 0., 0.1)
         nn.init.constant_(self.layer_1.bias, 0.1)
 
-        self.layer_2 = nn.Linear(action_dim, n_layer).to(self.device)
+        self.layer_2 = nn.Linear(action_dim, n_layer)
         nn.init.normal_(self.layer_2.weight, 0., 0.1)
         nn.init.constant_(self.layer_2.bias, 0.1)
 
         self.output = nn.Linear(n_layer, 1)
 
     def forward(self, s, a):
+
         s = self.layer_1(s)
         a = self.layer_2(a)
-        q_val = self.output(torch.relu(s + a))
+        q_val = self.output(torch.relu(s+a))
         return q_val
 
 
 # Deep Deterministic Policy Gradient
 class DDPG(object):
-    def __init__(self, state_dim, action_dim, action_bound, replacement,device,memory_capacity=1000, gamma=0.9, lr_a=0.001,
-                 lr_c=0.002, batch_size=32):
+    def __init__(self, state_dim, action_dim, action_bound, replacement,memory_capacity=1000,gamma=0.9,lr_a=0.001, lr_c=0.002,batch_size=32) :
         super(DDPG, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -79,17 +77,16 @@ class DDPG(object):
         self.lr_a = lr_a
         self.lr_c = lr_c
         self.batch_size = batch_size
-        self.device=device  # 使用GPU加速
 
         # 记忆库
         self.memory = np.zeros((memory_capacity, state_dim * 2 + action_dim + 1))
         self.pointer = 0
         # 定义 Actor 网络
-        self.actor = Actor(state_dim, action_dim, action_bound,self.device).to(self.device)
-        self.actor_target = Actor(state_dim, action_dim, action_bound,self.device).to(self.device)
+        self.actor = Actor(state_dim, action_dim, action_bound)
+        self.actor_target = Actor(state_dim, action_dim, action_bound)
         # 定义 Critic 网络
-        self.critic = Critic(state_dim, action_dim,self.device).to(self.device)
-        self.critic_target = Critic(state_dim, action_dim,self.device).to(self.device)
+        self.critic = Critic(state_dim,action_dim)
+        self.critic_target = Critic(state_dim,action_dim)
         # 定义优化器
         self.aopt = torch.optim.Adam(self.actor.parameters(), lr=lr_a)
         self.copt = torch.optim.Adam(self.critic.parameters(), lr=lr_c)
@@ -101,9 +98,9 @@ class DDPG(object):
         return self.memory[indices, :]
 
     def choose_action(self, s):
-        s = torch.FloatTensor(s).to(self.device)
+        s = torch.FloatTensor(s)
         action = self.actor(s)
-        return action.detach()
+        return action.detach().numpy()
 
     def learn(self):
 
@@ -115,16 +112,16 @@ class DDPG(object):
             a_layers = self.actor_target.named_children()
             c_layers = self.critic_target.named_children()
             for al in a_layers:
-                a = self.actor.state_dict()[al[0] + '.weight']
-                al[1].weight.data.mul_((1 - tau))
-                al[1].weight.data.add_(tau * self.actor.state_dict()[al[0] + '.weight'])
-                al[1].bias.data.mul_((1 - tau))
-                al[1].bias.data.add_(tau * self.actor.state_dict()[al[0] + '.bias'])
+                a = self.actor.state_dict()[al[0]+'.weight']
+                al[1].weight.data.mul_((1-tau))
+                al[1].weight.data.add_(tau * self.actor.state_dict()[al[0]+'.weight'])
+                al[1].bias.data.mul_((1-tau))
+                al[1].bias.data.add_(tau * self.actor.state_dict()[al[0]+'.bias'])
             for cl in c_layers:
-                cl[1].weight.data.mul_((1 - tau))
-                cl[1].weight.data.add_(tau * self.critic.state_dict()[cl[0] + '.weight'])
-                cl[1].bias.data.mul_((1 - tau))
-                cl[1].bias.data.add_(tau * self.critic.state_dict()[cl[0] + '.bias'])
+                cl[1].weight.data.mul_((1-tau))
+                cl[1].weight.data.add_(tau * self.critic.state_dict()[cl[0]+'.weight'])
+                cl[1].bias.data.mul_((1-tau))
+                cl[1].bias.data.add_(tau * self.critic.state_dict()[cl[0]+'.bias'])
 
         else:
             # hard的意思是每隔一定的步数才更新全部参数
@@ -133,20 +130,20 @@ class DDPG(object):
                 a_layers = self.actor_target.named_children()
                 c_layers = self.critic_target.named_children()
                 for al in a_layers:
-                    al[1].weight.data = self.actor.state_dict()[al[0] + '.weight']
-                    al[1].bias.data = self.actor.state_dict()[al[0] + '.bias']
+                    al[1].weight.data = self.actor.state_dict()[al[0]+'.weight']
+                    al[1].bias.data = self.actor.state_dict()[al[0]+'.bias']
                 for cl in c_layers:
-                    cl[1].weight.data = self.critic.state_dict()[cl[0] + '.weight']
-                    cl[1].bias.data = self.critic.state_dict()[cl[0] + '.bias']
+                    cl[1].weight.data = self.critic.state_dict()[cl[0]+'.weight']
+                    cl[1].bias.data = self.critic.state_dict()[cl[0]+'.bias']
 
             self.t_replace_counter += 1
 
         # 从记忆库中采样bacth data
         bm = self.sample()
-        bs = torch.FloatTensor(bm[:, :self.state_dim]).to(self.device)
-        ba = torch.FloatTensor(bm[:, self.state_dim:self.state_dim + self.action_dim]).to(self.device)
-        br = torch.FloatTensor(bm[:, -self.state_dim - 1: -self.state_dim]).to(self.device)
-        bs_ = torch.FloatTensor(bm[:, -self.state_dim:]).to(self.device)
+        bs = torch.FloatTensor(bm[:, :self.state_dim])
+        ba = torch.FloatTensor(bm[:, self.state_dim:self.state_dim + self.action_dim])
+        br = torch.FloatTensor(bm[:, -self.state_dim - 1: -self.state_dim])
+        bs_ = torch.FloatTensor(bm[:,-self.state_dim:])
 
         # 训练Actor
         a = self.actor(bs)
@@ -161,7 +158,7 @@ class DDPG(object):
         q_ = self.critic_target(bs_, a_)
         q_target = br + self.gamma * q_
         q_eval = self.critic(bs, ba)
-        td_error = self.mse_loss(q_target, q_eval)
+        td_error = self.mse_loss(q_target,q_eval)
         self.copt.zero_grad()
         td_error.backward()
         self.copt.step()
@@ -171,4 +168,3 @@ class DDPG(object):
         index = self.pointer % self.memory_capacity
         self.memory[index, :] = transition
         self.pointer += 1
-
