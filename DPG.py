@@ -6,68 +6,19 @@ torch实现DDPG算法
 import torch
 import numpy as np
 import torch.nn as nn
+from AC import *
 
 seed = 1
-torch.manual_seed(seed)
+torch.manual_seed(seed)  # 设置随机种子
 np.random.seed(seed)
 torch.set_default_dtype(torch.float)
 
 
-# Actor Net
-# Actor：输入是state，输出的是一个确定性的action
-class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, action_bound):
-        super(Actor, self).__init__()
-        self.action_bound = torch.FloatTensor(action_bound)
-
-        # layer
-        self.layer_1 = nn.Linear(state_dim, 30)
-        nn.init.normal_(self.layer_1.weight, 0., 0.3)
-        nn.init.constant_(self.layer_1.bias, 0.1)
-        # self.layer_1.weight.data.normal_(0.,0.3)
-        # self.layer_1.bias.data.fill_(0.1)
-        self.output = nn.Linear(30, action_dim)
-        self.output.weight.data.normal_(0.,0.3)
-        self.output.bias.data.fill_(0.1)
-
-    def forward(self, s):
-        a = torch.relu(self.layer_1(s))
-        a = torch.tanh(self.output(a))
-        # 对action进行放缩，实际上a in [-1,1]
-        scaled_a = a * self.action_bound
-        return scaled_a
-
-
-# Critic Net
-# Critic输入的是当前的state以及Actor输出的action,输出的是Q-value
-class Critic(nn.Module):
-
-    def __init__(self, state_dim, action_dim):
-        super(Critic, self).__init__()
-        n_layer = 30
-        # layer
-        self.layer_1 = nn.Linear(state_dim, n_layer)
-        nn.init.normal_(self.layer_1.weight, 0., 0.1)
-        nn.init.constant_(self.layer_1.bias, 0.1)
-
-        self.layer_2 = nn.Linear(action_dim, n_layer)
-        nn.init.normal_(self.layer_2.weight, 0., 0.1)
-        nn.init.constant_(self.layer_2.bias, 0.1)
-
-        self.output = nn.Linear(n_layer, 1)
-
-    def forward(self, s, a):
-
-        s = self.layer_1(s)
-        a = self.layer_2(a)
-        q_val = self.output(torch.relu(s+a))
-        return q_val
-
-
-# Deep Deterministic Policy Gradient
-class DDPG(object):
-    def __init__(self, state_dim, action_dim, action_bound, replacement,memory_capacity=1000,gamma=0.9,lr_a=0.001, lr_c=0.002,batch_size=32) :
-        super(DDPG, self).__init__()
+# Deterministic Policy Gradient
+class DPG(object):
+    def __init__(self, state_dim, action_dim, action_bound, replacement, memory_capacity=1000,
+                 gamma=0.9, lr_a=0.001, lr_c=0.002, batch_size=32):
+        super(DPG, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.memory_capacity = memory_capacity
@@ -85,14 +36,15 @@ class DDPG(object):
         self.actor = Actor(state_dim, action_dim, action_bound)
         self.actor_target = Actor(state_dim, action_dim, action_bound)
         # 定义 Critic 网络
-        self.critic = Critic(state_dim,action_dim)
-        self.critic_target = Critic(state_dim,action_dim)
+        self.critic = Critic(state_dim, action_dim)
+        self.critic_target = Critic(state_dim, action_dim)
         # 定义优化器
         self.aopt = torch.optim.Adam(self.actor.parameters(), lr=lr_a)
         self.copt = torch.optim.Adam(self.critic.parameters(), lr=lr_c)
         # 选取损失函数
         self.mse_loss = nn.MSELoss()
 
+    # 记忆池中随机采样
     def sample(self):
         indices = np.random.choice(self.memory_capacity, size=self.batch_size)
         return self.memory[indices, :]
@@ -112,16 +64,16 @@ class DDPG(object):
             a_layers = self.actor_target.named_children()
             c_layers = self.critic_target.named_children()
             for al in a_layers:
-                a = self.actor.state_dict()[al[0]+'.weight']
-                al[1].weight.data.mul_((1-tau))
-                al[1].weight.data.add_(tau * self.actor.state_dict()[al[0]+'.weight'])
-                al[1].bias.data.mul_((1-tau))
-                al[1].bias.data.add_(tau * self.actor.state_dict()[al[0]+'.bias'])
+                a = self.actor.state_dict()[al[0] + '.weight']
+                al[1].weight.data.mul_((1 - tau))
+                al[1].weight.data.add_(tau * self.actor.state_dict()[al[0] + '.weight'])
+                al[1].bias.data.mul_((1 - tau))
+                al[1].bias.data.add_(tau * self.actor.state_dict()[al[0] + '.bias'])
             for cl in c_layers:
-                cl[1].weight.data.mul_((1-tau))
-                cl[1].weight.data.add_(tau * self.critic.state_dict()[cl[0]+'.weight'])
-                cl[1].bias.data.mul_((1-tau))
-                cl[1].bias.data.add_(tau * self.critic.state_dict()[cl[0]+'.bias'])
+                cl[1].weight.data.mul_((1 - tau))
+                cl[1].weight.data.add_(tau * self.critic.state_dict()[cl[0] + '.weight'])
+                cl[1].bias.data.mul_((1 - tau))
+                cl[1].bias.data.add_(tau * self.critic.state_dict()[cl[0] + '.bias'])
 
         else:
             # hard的意思是每隔一定的步数才更新全部参数
@@ -130,20 +82,20 @@ class DDPG(object):
                 a_layers = self.actor_target.named_children()
                 c_layers = self.critic_target.named_children()
                 for al in a_layers:
-                    al[1].weight.data = self.actor.state_dict()[al[0]+'.weight']
-                    al[1].bias.data = self.actor.state_dict()[al[0]+'.bias']
+                    al[1].weight.data = self.actor.state_dict()[al[0] + '.weight']
+                    al[1].bias.data = self.actor.state_dict()[al[0] + '.bias']
                 for cl in c_layers:
-                    cl[1].weight.data = self.critic.state_dict()[cl[0]+'.weight']
-                    cl[1].bias.data = self.critic.state_dict()[cl[0]+'.bias']
+                    cl[1].weight.data = self.critic.state_dict()[cl[0] + '.weight']
+                    cl[1].bias.data = self.critic.state_dict()[cl[0] + '.bias']
 
             self.t_replace_counter += 1
 
-        # 从记忆库中采样bacth data
+        # 从记忆库中采样batch data
         bm = self.sample()
         bs = torch.FloatTensor(bm[:, :self.state_dim])
         ba = torch.FloatTensor(bm[:, self.state_dim:self.state_dim + self.action_dim])
         br = torch.FloatTensor(bm[:, -self.state_dim - 1: -self.state_dim])
-        bs_ = torch.FloatTensor(bm[:,-self.state_dim:])
+        bs_ = torch.FloatTensor(bm[:, -self.state_dim:])
 
         # 训练Actor
         a = self.actor(bs)
@@ -158,7 +110,7 @@ class DDPG(object):
         q_ = self.critic_target(bs_, a_)
         q_target = br + self.gamma * q_
         q_eval = self.critic(bs, ba)
-        td_error = self.mse_loss(q_target,q_eval)
+        td_error = self.mse_loss(q_target, q_eval)
         self.copt.zero_grad()
         td_error.backward()
         self.copt.step()
