@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
-
+"""
+该文件定义了DPG使用道德Actor和Critic
+并不是actor-critic算法的实现。
+"""
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, action_bound):
